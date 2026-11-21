@@ -102,6 +102,8 @@ Switch tracking behavior instantly with built-in modes:
 - **Stalker** — track absolutely everything
 - **Lite** — track only the essentials (messages, deletes, typing, avatar, voice, status)
 - **Silent** — pause all notifications without losing any logged data
+
+A per-user override always beats the global preset: in Lite, turning Messages off for one person turns it off for them while everyone else keeps the Lite defaults.
   <p>
   <img src="https://github.com/k1ng0p/UserRadar/blob/main/Previews/Screenshot%202026-08-04%20014003.png?raw=true" width="600" />
   </p>

@@ -14,6 +14,11 @@ export function msgPreview(content: string, filename?: string) {
 
 export function isFeatureOn(uid: string, userKey: keyof WatchedUser["overrides"], globalKey: string): boolean {
     if (!isWatched(settings, uid)) return false
+    // a per-user override always wins, the global preset only fills in features left on default.
+    // stalker/lite used to return before reading overrides, so toggling one in the watchlist
+    // manager saved it but changed nothing and the toggle stayed on
+    const ov = getWatchedUser(settings, uid)?.overrides?.[userKey]
+    if (ov === true || ov === false) return ov
     const mode = settings.store.globalPresetMode ?? "custom"
     if (mode === "stalker") return true
     if (mode === "lite") return LITE_FEATURES.includes(userKey)

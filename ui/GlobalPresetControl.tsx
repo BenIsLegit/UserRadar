@@ -109,7 +109,7 @@ export function GlobalPresetControl({ refresh }: { refresh: () => void }) {
                         flexShrink: 0,
                     }} />
                     <span>
-                        All users follow the <b style={{ color: presets[activeIndex].color }}>{presets[activeIndex].label}</b> preset. Individual overrides are disabled. Switch to <b style={{ color: C.brand, cursor: "pointer" }} onClick={() => { settings.store.globalPresetMode = "custom"; refresh() }}>Custom</b> to configure per-user.
+                        Users follow the <b style={{ color: presets[activeIndex].color }}>{presets[activeIndex].label}</b> preset for anything left on default. A per-user override always wins. Switch to <b style={{ color: C.brand, cursor: "pointer" }} onClick={() => { settings.store.globalPresetMode = "custom"; refresh() }}>Custom</b> to set the defaults yourself.
                     </span>
                 </div>
             )}

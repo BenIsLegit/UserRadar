@@ -228,7 +228,7 @@ export function WatchedRow({ user, refresh, expandedId, setExpandedId, onRemove,
                                 {user.nick}
                             </span>
                         )}
-                        {settings.store.globalPresetMode === "custom" && activePreset !== "custom" && (
+                        {activePreset !== "custom" && (
                             <span className="ur-badge-glass" style={{
                                 background: activePreset === "stalker" ? `${C.danger}25` : activePreset === "lite" ? `${C.brandLight}25` : `${C.muted}25`,
                                 color: activePreset === "stalker" ? C.danger : activePreset === "lite" ? C.brandLight : C.muted,

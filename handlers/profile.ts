@@ -159,7 +159,17 @@ export function onUserUpdate({ user }: { user: any }) {
     const old = profileCache[user.id]
     // no baseline yet, an event only carries part of the profile so it can't be one
     if (!old) return
-    checkProfileChanged(user.id, { ...old, user: { ...old.user, ...camelize(user) } })
+    // discord dispatches USER_UPDATE with partial user objects (message authors, lookups) that say
+    // banner: null / bio: null whatever the real profile has, so merging the whole object logged
+    // "removed their banner" for people who never touched it. only take the fields these events
+    // are reliable for; banner and bio come from the full profile poll
+    const fields = camelize(user)
+    const patch = Object.fromEntries(
+        ["username", "globalName", "avatar", "discriminator", "pronouns"]
+            .filter(f => fields[f] !== undefined)
+            .map(f => [f, fields[f]])
+    )
+    checkProfileChanged(user.id, { ...old, user: { ...old.user, ...patch } })
 }
 
 export function onUserProfileFetchSuccess(rawEvt: any) {

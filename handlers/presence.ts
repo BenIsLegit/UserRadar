@@ -3,8 +3,9 @@ import { UserStore } from "@webpack/common"
 
 import { appIconCache, fetchAppIcon, resolveActivityImage } from "../activityMedia"
 import { activityStore, logActivity, logUserActivity } from "../activityStore"
-import { _logDebounce, activityCache, actKey, clientCache, customStatusCache, presenceDebounce, statusCache, statusSessionCache } from "../caches"
+import { _logDebounce, activityCache, actKey, clientCache, customStatusCache, deviceCache, presenceDebounce, statusCache, statusSessionCache } from "../caches"
 import { ACT_VERB, CLIENT_EMOJI, CLIENT_LABEL_MAP, isOfflineStatus, STATUS_EMOJI_LOCAL, STATUS_LABEL } from "../constants"
+import { describeDeviceChange, describeDevices, deviceLabel, diffDevices, readDevices, shortDeviceChange } from "../devices"
 import { isFeatureOn, labeledName, notify, platformSuffixLog } from "../notify"
 import { runtime } from "../runtime"
 import { activeSessions, scheduleSessionSave, sessionKey, settleOpen, trackOpen } from "../sessions"
@@ -25,6 +26,16 @@ export async function handlePresenceUpdate(uid: string, u: any, isStartup: boole
     const dn = labeledName(uid, discordUser)
     const icon = discordUser ? avatarUrl(discordUser.id, (discordUser as any).avatar, 80) : undefined
 
+    // per-device diff (desktop / mobile / web / ...). an offline user has no devices even when
+    // the tick leaves clientStatus out; any other tick without it says nothing about devices
+    const oldDevices = deviceCache[uid] ?? {}
+    const newDevices = isOffline ? {} : readDevices((u as any).clientStatus ?? (u as any).client_status)
+    const deviceChanges = newDevices ? diffDevices(oldDevices, newDevices) : []
+    if (newDevices) deviceCache[uid] = newDevices
+    const deviceDetail = deviceChanges.map(shortDeviceChange).join(", ")
+    const withDevices = (s: string) => deviceDetail ? `${s} · ${deviceDetail}` : s
+    let statusNotified = false
+
     let sessionJustEnded = false
 
     // keeps a short window open so a duplicate presence event right after a
@@ -38,13 +49,22 @@ export async function handlePresenceUpdate(uid: string, u: any, isStartup: boole
 
     if (!isOffline && !isStartup) {
         if (!statusSessionCache[uid]) {
+            const now = Date.now()
             statusSessionCache[uid] = {
-                startTime: Date.now(),
+                startTime: now,
                 startStatus: newStatus,
-                changes: [{ status: newStatus, ts: Date.now() }],
-                platforms: clientCache[uid] ? [{ platform: clientCache[uid]!, ts: Date.now() }] : [],
+                changes: [{ status: newStatus, ts: now }],
+                platforms: clientCache[uid] ? [{ platform: clientCache[uid]!, ts: now }] : [],
+                // devices already connected before we started watching (plugin start, re-add).
+                // a fresh login has none here and gets offline -> online entries just below
+                devices: Object.entries(oldDevices).map(([platform, status]) => ({ platform, from: null, to: status, ts: now })),
             }
         }
+    }
+
+    // before the offline block closes the session, so the last device going offline lands in it
+    if (!isStartup && deviceChanges.length && statusSessionCache[uid]) {
+        statusSessionCache[uid]!.devices.push(...deviceChanges)
     }
 
     if (!isOffline && statusSessionCache[uid] && oldStatus !== undefined && oldStatus !== newStatus && !isStartup && !recentlyTransitioned) {
@@ -54,10 +74,11 @@ export async function handlePresenceUpdate(uid: string, u: any, isStartup: boole
             notify({
                 _uid: uid,
                 title: `${dn} is now ${newStatus}`,
-                body: `was: ${STATUS_LABEL[oldStatus] || oldStatus}`,
+                body: withDevices(`was: ${STATUS_LABEL[oldStatus] || oldStatus}`),
                 icon,
                 onClick: () => openUserProfile(uid),
             })
+            statusNotified = true
         }
     }
 
@@ -91,14 +112,25 @@ export async function handlePresenceUpdate(uid: string, u: any, isStartup: boole
             }
         }).filter(Boolean)
 
+        const deviceTimeline = (session.devices || []).map(d => ({
+            platform: d.platform,
+            from: d.from,
+            to: d.to,
+            time: new Date(d.ts).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", second: "2-digit", hour12: true }),
+            ts: d.ts,
+        }))
+        const devicesUsed = [...new Set((session.devices || []).map(d => d.platform))]
+        const lastOn = Object.keys(oldDevices).map(deviceLabel).join(", ")
+
         if (isFeatureOn(uid, "status", "globalStatus")) {
             notify({
                 _uid: uid,
                 title: `${dn} went offline`,
-                body: durStr ? `Online for ${durStr}` : "",
+                body: [durStr && `Online for ${durStr}`, lastOn && `last on ${lastOn}`].filter(Boolean).join(" · "),
                 icon,
                 onClick: () => openUserProfile(uid),
             })
+            statusNotified = true
         }
 
         if (isFeatureOn(uid, "status", "globalStatus")) logUserActivity(uid, "session", "⏱️", durStr ? `Online session · ${durStr}` : "Online session", "", {
@@ -111,6 +143,8 @@ export async function handlePresenceUpdate(uid: string, u: any, isStartup: boole
                 endStatus: newStatus,
                 statusTimeline,
                 platformTimeline,
+                deviceTimeline,
+                devicesUsed,
                 changeCount: changes.length,
                 platform: sessionPlatform,
             }
@@ -126,13 +160,32 @@ export async function handlePresenceUpdate(uid: string, u: any, isStartup: boole
         notify({
             _uid: uid,
             title: `${dn} is now ${newStatus}`,
-            body: `was: ${STATUS_LABEL[oldStatus] || oldStatus}`,
+            body: withDevices(`was: ${STATUS_LABEL[oldStatus] || oldStatus}`),
             icon,
             onClick: () => openUserProfile(uid),
         })
-        logActivity(uid, "status", STATUS_EMOJI_LOCAL[newStatus] || "⚫", `${STATUS_LABEL[oldStatus] || oldStatus} → ${STATUS_LABEL[newStatus] || newStatus}${platLog}`)
+        statusNotified = true
+        logActivity(uid, "status", STATUS_EMOJI_LOCAL[newStatus] || "⚫", withDevices(`${STATUS_LABEL[oldStatus] || oldStatus} → ${STATUS_LABEL[newStatus] || newStatus}${platLog}`))
     }
     statusCache[uid] = newStatus
+
+    // device changes the aggregate status didn't announce: first device coming online, a second
+    // device joining, desktop idling while mobile stays online, one device of several dropping.
+    // same duplicate-tick guard as aggregate changes; the timeline above still records everything
+    if (deviceChanges.length && !statusNotified && !isStartup && (onlineStateChange || !recentlyTransitioned)
+        && settings.store.deviceNotifications && isFeatureOn(uid, "status", "globalStatus")) {
+        const changed = new Set(deviceChanges.map(c => c.platform))
+        const others = Object.fromEntries(Object.entries(deviceCache[uid] ?? {}).filter(([p]) => !changed.has(p)))
+        const alsoOn = Object.keys(others).length ? `also on ${describeDevices(others)}` : ""
+        const single = deviceChanges.length === 1
+        notify({
+            _uid: uid,
+            title: single ? `${dn} ${describeDeviceChange(deviceChanges[0])}` : `${dn} changed devices`,
+            body: [single ? "" : deviceDetail, alsoOn].filter(Boolean).join(" · "),
+            icon,
+            onClick: () => openUserProfile(uid),
+        })
+    }
 
     const newClient = resolveClient((u as any).client_status ?? (u as any).clientStatus)
     const oldClient = clientCache[uid]

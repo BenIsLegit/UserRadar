@@ -15,6 +15,7 @@ export const settings = definePluginSettings({
     globalAvatar:       { type: OptionType.BOOLEAN, default: true,                   description: "avatar changes" },
     globalVoice:        { type: OptionType.BOOLEAN, default: true,                   description: "voice" },
     globalStatus:       { type: OptionType.BOOLEAN, default: false,                  description: "status (spammy)" },
+    deviceNotifications:{ type: OptionType.BOOLEAN, default: true,                   description: "notify when a single device (desktop/mobile/web) changes status, needs status tracking on. off still records the device timeline" },
     globalActivity:     { type: OptionType.BOOLEAN, default: false,                  description: "activity changes (spammy)" },
     globalJoins:        { type: OptionType.BOOLEAN, default: true,                   description: "server joins/leaves" },
     showPreview:        { type: OptionType.BOOLEAN, default: true,                   description: "show message preview" },

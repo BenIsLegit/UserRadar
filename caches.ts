@@ -1,5 +1,6 @@
 import { findByProps } from "@webpack"
 
+import { DeviceChange, DeviceMap, readDevices } from "./devices"
 import { unpin } from "./pins"
 import { activeSessions, scheduleSessionSave } from "./sessions"
 import { log } from "./store"
@@ -15,7 +16,15 @@ export const clientCache:   Record<string, string | null>                = {}
 export const cameraCache:   Record<string, boolean>                      = {}
 export const streamCache:   Record<string, boolean>                      = {}
 export const customStatusCache: Record<string, string | null>            = {}  // text status (activity type 4)
-export const statusSessionCache: Record<string, { startTime: number; startStatus: string; changes: { status: string; ts: number }[]; platforms: { platform: string; ts: number }[] } | null> = {}  // status session tracking
+export const deviceCache:   Record<string, DeviceMap>                    = {}  // per-platform status, like PlatformIndicators
+export const statusSessionCache: Record<string, {
+    startTime: number
+    startStatus: string
+    changes: { status: string; ts: number }[]
+    platforms: { platform: string; ts: number }[]
+    // from === null means the device was already on when the session started (plugin start / re-add)
+    devices: (Omit<DeviceChange, "from"> & { from: string | null })[]
+} | null> = {}  // status session tracking
 
 // pending "is typing" log per user+channel — MESSAGE_CREATE deletes it if they actually send.
 // stays if they don't.
@@ -50,6 +59,7 @@ export function seedUserCaches(uid: string) {
         const presMod = findByProps("getStatus", "getActivities")
         const cs = presMod?.getClientStatus?.(uid)
         clientCache[uid] = cs ? resolveClient(cs) : null
+        deviceCache[uid] = readDevices(cs) ?? {}
 
         const status = presMod?.getStatus?.(uid)
         if (status) statusCache[uid] = status
@@ -72,6 +82,7 @@ export function purgeUserCaches(uid: string) {
     delete cameraCache[uid]
     delete streamCache[uid]
     delete customStatusCache[uid]
+    delete deviceCache[uid]
     delete statusSessionCache[uid]
 
     // sessionKey always prefixes with "uid_", safe to match on that
@@ -91,7 +102,7 @@ export function purgeUserCaches(uid: string) {
 
 export function resetCaches() {
     for (const c of [profileCache, vcCache, statusCache, activityCache, guildCache, vcJoinTime, clientCache, cameraCache,
-        streamCache, customStatusCache, statusSessionCache, activeSessions, pendingTypingLog, _notifDebounce, _logDebounce] as Record<string, unknown>[]) {
+        streamCache, customStatusCache, deviceCache, statusSessionCache, activeSessions, pendingTypingLog, _notifDebounce, _logDebounce] as Record<string, unknown>[]) {
         for (const k of Object.keys(c)) delete c[k]
     }
     presenceDebounce.forEach(t => clearTimeout(t))

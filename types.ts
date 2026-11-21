@@ -67,6 +67,8 @@ export interface PresenceEvent {
     updates: {
         user: { id: string }
         status: Status
+        // flux sends clientStatus, raw gateway payloads use client_status
+        clientStatus?: Record<string, string>
         client_status?: {
             desktop?: string
             mobile?: string

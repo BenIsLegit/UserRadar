@@ -52,7 +52,8 @@ A Vencord plugin for keeping tabs on specific people on Discord. Add someone to 
 ### 🟢 Status Tracking
 
 - Online / idle / DND / offline changes
-- Which platform they're using
+- Per-device status, like PlatformIndicators: desktop, mobile, web, console and VR are tracked separately, so you see "came online on 📱 Mobile" or "is now Away on 💻 Desktop" even when their overall status doesn't change
+- Each online session gets a **Device Timeline** showing when every device connected, changed status and dropped off (turn off "device notifications" to keep the timeline without the pings)
 - Custom status (the emoji + text people set manually) with before/after
 - Smart enough to tell a real status change apart from someone briefly reconnecting — won't spam you every time their internet blips
  <p>

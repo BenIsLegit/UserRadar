@@ -4,8 +4,10 @@ import type { JSX } from "react"
 import { _albumColorCache, appIconCache, extractAlbumColor, fetchAppIcon, MUSIC_APP_ICONS } from "../activityMedia"
 import { ActivityEntry, activityStore, ActivityType } from "../activityStore"
 import { CLIENT_EMOJI, CLIENT_LABEL_MAP, FIELD_NAME } from "../constants"
+import { deviceLabel } from "../devices"
 import { activeSessions } from "../sessions"
 import { exactTime, formatDuration, hexToRgba, jumpTo, timeAgo, trunc } from "../utils"
+import { DeviceTimeline } from "./DeviceTimeline"
 import { actIco, ico } from "./icons"
 import { C } from "./theme"
 
@@ -331,7 +333,9 @@ function LogCardInner({ log, expanded, onToggle, onDelete, userId }: LogCardProp
                         }}>
                             <span style={{ opacity: 0.5, display: "flex", alignItems: "center" }}><ico.status /></span>
                             <span>
-                                {log.metadata?.platform ? `${CLIENT_EMOJI[log.metadata.platform.toLowerCase()] || "📡"} ${log.metadata.platform}` : "Status session"}
+                                {Array.isArray(log.metadata?.devicesUsed) && log.metadata.devicesUsed.length > 0
+                                    ? log.metadata.devicesUsed.map(deviceLabel).join(" + ")
+                                    : log.metadata?.platform ? `${CLIENT_EMOJI[log.metadata.platform.toLowerCase()] || "📡"} ${log.metadata.platform}` : "Status session"}
                                 {log.metadata?.duration ? ` · ${log.metadata.duration}` : ""}
                             </span>
                         </div>
@@ -951,7 +955,9 @@ function LogCardInner({ log, expanded, onToggle, onDelete, userId }: LogCardProp
                                                     </div>
                                                 ))}
                                             </div>
-                                            {Array.isArray(log.metadata.platformTimeline) && log.metadata.platformTimeline.length > 0 && (
+                                            {Array.isArray(log.metadata.deviceTimeline) && log.metadata.deviceTimeline.length > 0
+                                                ? <DeviceTimeline entries={log.metadata.deviceTimeline} />
+                                                : Array.isArray(log.metadata.platformTimeline) && log.metadata.platformTimeline.length > 0 && (
                                                 <div style={{ marginTop: 10, paddingTop: 10, borderTop: `1px solid ${C.border}` }}>
                                                     <div style={{
                                                         fontSize: 10,
@@ -1060,7 +1066,7 @@ function LogCardInner({ log, expanded, onToggle, onDelete, userId }: LogCardProp
                                     )}
                                     {Object.entries(log.metadata)
                                         .filter(([key, val]) =>
-                                            !["duration","startTime","endTime","members","metadata","type","action","name","song","artist","allArtists","album","trackId","albumId","artistIds","contextUri","trackType","albumArtUrl","largeImage","smallImage","smallText","statusDisplayType","createdAt","sessionId","partyId","partySize","appName","appLogo","gameIconUrl","applicationId","parentApplicationId","platform","platformKey","flags","buttons","secrets","url","startTimestamp","endTimestamp","timestamps","party","assets","statusTimeline","platformTimeline","startStatus","endStatus","changeCount","before","after","field","oldAvatar","newAvatar"].includes(key) &&
+                                            !["duration","startTime","endTime","members","metadata","type","action","name","song","artist","allArtists","album","trackId","albumId","artistIds","contextUri","trackType","albumArtUrl","largeImage","smallImage","smallText","statusDisplayType","createdAt","sessionId","partyId","partySize","appName","appLogo","gameIconUrl","applicationId","parentApplicationId","platform","platformKey","flags","buttons","secrets","url","startTimestamp","endTimestamp","timestamps","party","assets","statusTimeline","platformTimeline","deviceTimeline","devicesUsed","startStatus","endStatus","changeCount","before","after","field","oldAvatar","newAvatar"].includes(key) &&
                                             val !== undefined && val !== null && val !== "" &&
                                             !(typeof val === "object" && Object.keys(val).length === 0)
                                         )

@@ -35,6 +35,7 @@ export async function handlePresenceUpdate(uid: string, u: any, isStartup: boole
     const deviceDetail = deviceChanges.map(shortDeviceChange).join(", ")
     const withDevices = (s: string) => deviceDetail ? `${s} · ${deviceDetail}` : s
     let statusNotified = false
+    let statusLogged = false
 
     let sessionJustEnded = false
 
@@ -165,26 +166,33 @@ export async function handlePresenceUpdate(uid: string, u: any, isStartup: boole
             onClick: () => openUserProfile(uid),
         })
         statusNotified = true
+        statusLogged = true
         logActivity(uid, "status", STATUS_EMOJI_LOCAL[newStatus] || "⚫", withDevices(`${STATUS_LABEL[oldStatus] || oldStatus} → ${STATUS_LABEL[newStatus] || newStatus}${platLog}`))
     }
     statusCache[uid] = newStatus
 
-    // device changes the aggregate status didn't announce: first device coming online, a second
-    // device joining, desktop idling while mobile stays online, one device of several dropping.
-    // same duplicate-tick guard as aggregate changes; the timeline above still records everything
-    if (deviceChanges.length && !statusNotified && !isStartup && (onlineStateChange || !recentlyTransitioned)
-        && settings.store.deviceNotifications && isFeatureOn(uid, "status", "globalStatus")) {
+    if (deviceChanges.length && !isStartup && isFeatureOn(uid, "status", "globalStatus")) {
         const changed = new Set(deviceChanges.map(c => c.platform))
         const others = Object.fromEntries(Object.entries(deviceCache[uid] ?? {}).filter(([p]) => !changed.has(p)))
         const alsoOn = Object.keys(others).length ? `also on ${describeDevices(others)}` : ""
         const single = deviceChanges.length === 1
-        notify({
-            _uid: uid,
-            title: single ? `${dn} ${describeDeviceChange(deviceChanges[0])}` : `${dn} changed devices`,
-            body: [single ? "" : deviceDetail, alsoOn].filter(Boolean).join(" · "),
-            icon,
-            onClick: () => openUserProfile(uid),
-        })
+        const what = single ? describeDeviceChange(deviceChanges[0]) : "changed devices"
+        const detail = [single ? "" : deviceDetail, alsoOn].filter(Boolean).join(" · ")
+
+        // log right away so device changes show up while the session is still open (and during
+        // quiet hours, which only mute notifications). skipped when the session card that just
+        // closed or the aggregate status entry above already carries this tick
+        if (!sessionJustEnded && !statusLogged) {
+            const devIcon = single ? (CLIENT_EMOJI[deviceChanges[0].platform] || "📡") : "📡"
+            logActivity(uid, "status", devIcon, what, detail || what)
+        }
+
+        // device changes the aggregate status didn't announce: first device coming online, a second
+        // device joining, desktop idling while mobile stays online, one device of several dropping.
+        // same duplicate-tick guard as aggregate changes
+        if (!statusNotified && (onlineStateChange || !recentlyTransitioned) && settings.store.deviceNotifications) {
+            notify({ _uid: uid, title: `${dn} ${what}`, body: detail, icon, onClick: () => openUserProfile(uid) })
+        }
     }
 
     const newClient = resolveClient((u as any).client_status ?? (u as any).clientStatus)
